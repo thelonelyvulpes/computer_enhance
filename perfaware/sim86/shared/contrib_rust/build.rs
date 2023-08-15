@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use std::env;
+use std::path::PathBuf;
 
 fn main() {
     let lib_path = PathBuf::from("../");
@@ -12,14 +12,10 @@ fn main() {
     // Compile the library ourselves so we don't need to rely on the existing platform specific binaries
     let mut build = cc::Build::new();
 
-    if cfg!(target_os = "linux") {
-        build
-            .flag("-std=c++17")
-            .flag("-Wno-missing-field-initializers")
-            .flag("-Wno-unused-function");
-    } else {
-        build.flag("/std:c++17");
-    }
+    build
+        .flag("-std=c++17")
+        .flag("-Wno-missing-field-initializers")
+        .flag("-Wno-unused-function");
 
     build
         .cpp(true)

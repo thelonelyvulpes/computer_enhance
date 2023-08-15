@@ -1,3 +1,4 @@
+mod simulator;
 use sim86_shared::*;
 use std::env;
 
@@ -33,9 +34,6 @@ fn main() {
         table.EncodingCount
     );
 
-    // Note(rob): If the user passes in a file, then we can use that to get the
-    // disassembly, otherwise we use the EXAMPLE_DISASSEMBLY.
-
     let args: Vec<String> = env::args().collect();
 
     let file_buf = if args.len() > 1 {
@@ -50,17 +48,18 @@ fn main() {
 
     let buf = file_buf.unwrap_or_else(|| EXAMPLE_DISASSEMBLY.to_vec());
 
+    println!("    [  ax,   bx,   cx,   dx,   sp,   bp,   si,   di][  es,   cs,   ss,   ds,   ip][flgs]");
+    let mut simulator = simulator::Simulator::new();
     let mut offset = 0u32;
+    let mut inst = 0;
     while offset < buf.len() as u32 {
+        inst += 1;
         let decoded = decode_8086_instruction(&buf[offset as usize..]);
         if let Some(decoded) = decoded {
             if decoded.Op != operation_type_Op_None {
                 offset += decoded.Size;
-                let mnemonic = mnemonic_from_operation_type(decoded.Op);
-                println!(
-                    "size:{} op:{mnemonic} Flags:{:#0x}",
-                    decoded.Size, decoded.Flags
-                );
+                print!("{:0>3} ", inst);
+                simulator.execute_instruction(&decoded);
             }
         } else {
             println!("Unrecognised instruction");
