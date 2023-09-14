@@ -113,64 +113,71 @@ impl Simulator {
         let src_inst = inst.Operands[1];
         let dst_inst = inst.Operands[0];
         let dst = self.u16_ptr(dst_inst);
+        let mut alu: u32;
 
-        let result_val = match src_inst.Type {
+        match src_inst.Type {
             operand_type_Operand_Register => {
                 let val = *self.register_ptr(src_inst.__bindgen_anon_1.Register.Index as usize);
                 match inst.Op {
                     operation_type_Op_add => {
-                        *dst = *dst + val;
-                        *dst
+                        alu = (*dst as u32) << 8;
+                        alu = alu + ((val as u32) << 8);
+                        *dst = ((alu << 8) >> 16) as u16;
                     }
                     operation_type_Op_cmp => {
-                        let res = *dst - val;
-                        res.into()
+                        alu = (*dst as u32) << 8;
+                        alu = alu - ((val as u32) << 8);
                     }
                     operation_type_Op_sub => {
-                        *dst = *dst - val;
-                        *dst
+                        alu = (*dst as u32) << 8;
+                        alu = alu - ((val as u32) << 8);
+                        *dst = ((alu << 8) >> 16) as u16;
                     }
                     _ => {
                         panic!("Illegal operation type");
                     }
-                }
+                };
             }
             operand_type_Operand_Immediate => {
                 let val = src_inst.__bindgen_anon_1.Immediate.Value as u16;
                 match inst.Op {
                     operation_type_Op_add => {
-                        *dst = *dst + val;
-                        *dst
+                        alu = (*dst as u32) << 8;
+                        alu = alu + ((val as u32) << 8);
+                        *dst = ((alu << 8) >> 16) as u16;
                     }
                     operation_type_Op_cmp => {
-                        let res = *dst - val;
-                        res.into()
+                        alu = (*dst as u32) << 8;
+                        alu = alu - ((val as u32) << 8);
                     }
                     operation_type_Op_sub => {
-                        *dst = *dst - val;
-                        *dst
+                        alu = (*dst as u32) << 8;
+                        alu = alu - ((val as u32) << 8);
+                        *dst = ((alu << 8) >> 16) as u16;
                     }
                     _ => {
                         panic!("Illegal operation type");
                     }
-                }
+                };
             }
             _ => {
                 panic!("Illegal operand for op.")
             }
         };
 
-        self.set_zero_flag(result_val);
-        self.set_signed_flag(result_val);
-        self.set_parity_flag(result_val);
+        self.set_zero_flag(alu);
+        self.set_signed_flag(alu);
+        self.set_overflow_flag(alu);
+        self.set_parity_flag(alu);
     }
 
     unsafe fn execute_u8_arithmetic(&mut self, inst: &instruction) {
         let src_inst = inst.Operands[1];
         let dst_inst = inst.Operands[0];
         let dst = self.u16_ptr(dst_inst);
+        let mut alu: u32;
 
-        let result_val = match src_inst.Type {
+        match src_inst.Type {
             operand_type_Operand_Register => {
                 let reg_index = src_inst.__bindgen_anon_1.Register.Index as usize;
                 let high_src = src_inst.__bindgen_anon_1.Register.Offset == 0;
@@ -179,35 +186,56 @@ impl Simulator {
                 let sub_dst = into_u8_ptr(dst, high_dst);
                 match inst.Op {
                     operation_type_Op_add => {
-                        *sub_dst = *sub_dst + val;
-                        *sub_dst
+                        alu = (*sub_dst as u32) << 8;
+                        alu = alu + ((val as u32) << 8);
+                        *sub_dst = ((alu << 16) >> 24) as u8;
                     }
                     operation_type_Op_cmp => {
-                        let res = *sub_dst - val;
-                        res
+                        alu = (*sub_dst as u32) << 8;
+                        alu = alu - ((val as u32) << 8);
                     }
                     operation_type_Op_sub => {
-                        *sub_dst = *sub_dst - val;
-                        *sub_dst
+                        alu = (*sub_dst as u32) << 8;
+                        alu = alu - ((val as u32) << 8);
+                        *sub_dst = ((alu << 16) >> 24) as u8;
                     }
                     _ => {
                         panic!("Illegal operation type");
                     }
-                }
+                };
             }
             operand_type_Operand_Immediate => {
-                let dst = into_u8_ptr(dst, dst_inst.__bindgen_anon_1.Register.Offset == 0);
-                *dst = *dst + src_inst.__bindgen_anon_1.Immediate.Value as u8;
-                *dst
+                let sub_dst = into_u8_ptr(dst, dst_inst.__bindgen_anon_1.Register.Offset == 0);
+                let val = src_inst.__bindgen_anon_1.Immediate.Value as u8;
+                match inst.Op {
+                    operation_type_Op_add => {
+                        alu = (*sub_dst as u32) << 8;
+                        alu = alu + ((val as u32) << 8);
+                        *sub_dst = ((alu << 16) >> 24) as u8;
+                    }
+                    operation_type_Op_cmp => {
+                        alu = (*sub_dst as u32) << 8;
+                        alu = alu - ((val as u32) << 8);
+                    }
+                    operation_type_Op_sub => {
+                        alu = (*sub_dst as u32) << 8;
+                        alu = alu - ((val as u32) << 8);
+                        *sub_dst = ((alu << 16) >> 24) as u8;
+                    }
+                    _ => {
+                        panic!("Illegal operation type");
+                    }
+                };
             }
             _ => {
                 panic!("Illegal operand for op.")
             }
         };
 
-        self.set_zero_flag(result_val.into());
-        self.set_signed_flag(result_val.into());
-        self.set_parity_flag(result_val.into());
+        self.set_zero_flag(alu);
+        self.set_signed_flag_u8(alu);
+        self.set_overflow_flag_u8(alu);
+        self.set_parity_flag(alu);
     }
 
     unsafe fn register_ptr(&mut self, idx: usize) -> *mut u16 {
@@ -233,7 +261,7 @@ impl Simulator {
         }
     }
 
-    fn set_zero_flag(&mut self, result_val: u16) {
+    fn set_zero_flag(&mut self, result_val: u32) {
         self.registers.flags = if result_val == 0 {
             self.registers.flags | 0x0040u16
         } else {
@@ -241,26 +269,49 @@ impl Simulator {
         };
     }
 
-    fn set_signed_flag(&mut self, result_val: u16) {
-        self.registers.flags = if (result_val & 0x4000) >> 14 == 1 {
+    fn set_signed_flag_u8(&mut self, alu: u32) {
+        self.registers.flags = if (((alu >> 8) as u8) & 0x80) >> 7 == 1 {
             self.registers.flags | 0x0080u16
         } else {
             self.registers.flags & 0xFF7Fu16
         };
     }
 
-    fn set_parity_flag(&mut self, result_val: u16) {
-        let mut total = 0;
-        let mut ctr = result_val;
-        for _ in 0..8 {
-            total += ctr & 1;
-            ctr >>= 1;
-        }
+    fn set_signed_flag(&mut self, alu: u32) {
+        self.registers.flags = if (((alu >> 8) as u16) & 0x8000) >> 15 == 1 {
+            self.registers.flags | 0x0080u16
+        } else {
+            self.registers.flags & 0xFF7Fu16
+        };
+    }
+
+    fn set_parity_flag(&mut self, alu: u32) {
+        let total = ((alu >> 8) >> 8).count_ones();
+        // let mut ctr = alu >> 8;
+        // for _ in 0..8 {
+        //     total += ctr & 1;
+        //     ctr >>= 1;
+        // }
         self.registers.flags = if total % 2 == 0 {
             self.registers.flags | 0x0004u16
         } else {
             self.registers.flags & 0xFFFBu16
         }
+    }
+
+    fn set_overflow_flag(&mut self, alu: u32) {
+        self.registers.flags = if (alu >> 8) > u16::MAX as u32 {
+            self.registers.flags | 0x0800u16
+        } else {
+            self.registers.flags & 0xF7FFu16
+        };
+    }
+    fn set_overflow_flag_u8(&mut self, alu: u32) {
+        self.registers.flags = if (alu >> 8) > u8::MAX as u32 {
+            self.registers.flags | 0x0800u16
+        } else {
+            self.registers.flags & 0xF7FFu16
+        };
     }
 }
 
@@ -280,12 +331,15 @@ mod tests {
 
     #[test]
     fn bit_counting() {
-        let mut total = 0;
-        let mut n = 57u16;
-        for _ in 0..8 {
-            total += n & 1;
-            n >>= 1;
-        }
+        let mut total = 57u16.count_ones();
         assert_eq!(4, total)
+    }
+
+
+    #[test]
+    fn shift() {
+        let val = 1;
+        let shifted = val >> 1;
+        assert_eq!(0, shifted);
     }
 }

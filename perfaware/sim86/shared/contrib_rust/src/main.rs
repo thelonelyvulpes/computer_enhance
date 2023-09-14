@@ -1,6 +1,7 @@
 mod simulator;
 use sim86_shared::*;
 use std::env;
+use std::str::FromStr;
 
 const EXAMPLE_DISASSEMBLY: [u8; 247] = [
     0x03, 0x18, 0x03, 0x5E, 0x00, 0x83, 0xC6, 0x02, 0x83, 0xC5, 0x02, 0x83, 0xC1, 0x08, 0x03, 0x5E,
@@ -36,6 +37,10 @@ fn main() {
 
     let args: Vec<String> = env::args().collect();
 
+    for arg in args {
+        let x = u16::from_str(arg.as_str());
+    }
+
     let file_buf = if args.len() > 1 {
         let file_path = &args[1];
         Some(
@@ -45,7 +50,6 @@ fn main() {
     } else {
         None
     };
-
     let buf = file_buf.unwrap_or_else(|| EXAMPLE_DISASSEMBLY.to_vec());
 
     println!("    [  ax,   bx,   cx,   dx,   sp,   bp,   si,   di][  es,   cs,   ss,   ds,   ip][flgs]");
@@ -57,8 +61,9 @@ fn main() {
         let decoded = decode_8086_instruction(&buf[offset as usize..]);
         if let Some(decoded) = decoded {
             if decoded.Op != operation_type_Op_None {
+                // println!("{}: {}", decoded.Op, decoded.Flags);
                 offset += decoded.Size;
-                print!("{:0>3} ", inst);
+                print!("{:0>3}", inst);
                 simulator.execute_instruction(&decoded);
             }
         } else {
