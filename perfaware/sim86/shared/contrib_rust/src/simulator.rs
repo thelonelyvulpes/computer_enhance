@@ -4,6 +4,11 @@ const REG_LEN: usize = 8;
 const BIU_LEN: usize = 5;
 const MEM_LEN: usize = 10_000;
 
+const PARITY_FLAG: u16 = 0x0004u16;
+const SIGNED_FLAG: u16 = 0x0080u16;
+const ZERO_FLAG: u16 = 0x0040u16;
+const OVERFLOW_FLAG: u16 = 0x0800u16;
+
 struct Registers {
     pub(crate) arr: Vec<u16>,
     pub(crate) flags: u16,
@@ -64,6 +69,24 @@ impl Simulator {
                     self.execute_u8_arithmetic(inst);
                 }
             },
+            operation_type_Op_jne => unsafe {
+                self.cnd_jmp(inst, ZERO_FLAG, false);
+            },
+            operation_type_Op_je => unsafe {
+                self.cnd_jmp(inst, ZERO_FLAG, true);
+            },
+            operation_type_Op_jnp => unsafe {
+                self.cnd_jmp(inst, PARITY_FLAG, false);
+            },
+            operation_type_Op_jp => unsafe {
+                self.cnd_jmp(inst, PARITY_FLAG, true);
+            },
+            operation_type_Op_jnb => unsafe {
+                self.cnd_jmp(inst, OVERFLOW_FLAG, false);
+            },
+            operation_type_Op_jb => unsafe {
+                self.cnd_jmp(inst, OVERFLOW_FLAG, true);
+            },
             _ => {
                 unimplemented!();
             }
@@ -77,7 +100,7 @@ impl Simulator {
         return self.registers.biu[4];
     }
 
-    unsafe fn execute_mov(&mut self, inst: &instruction) {
+    unsafe fn execute_mov(&mut self, inst: &instruction) -> () {
         let src_inst = inst.Operands[1];
         let dst_inst = inst.Operands[0];
         let wide = (inst.Flags & 8u32) == 8;
@@ -113,7 +136,7 @@ impl Simulator {
         }
     }
 
-    unsafe fn execute_arithmetic(&mut self, inst: &instruction) {
+    unsafe fn execute_arithmetic(&mut self, inst: &instruction) -> () {
         let src_inst = inst.Operands[1];
         let dst_inst = inst.Operands[0];
         let dst = self.u16_ptr(dst_inst);
@@ -175,7 +198,7 @@ impl Simulator {
         self.set_parity_flag(alu);
     }
 
-    unsafe fn execute_u8_arithmetic(&mut self, inst: &instruction) {
+    unsafe fn execute_u8_arithmetic(&mut self, inst: &instruction) -> () {
         let src_inst = inst.Operands[1];
         let dst_inst = inst.Operands[0];
         let dst = self.u16_ptr(dst_inst);
@@ -265,57 +288,68 @@ impl Simulator {
         }
     }
 
-    fn set_zero_flag(&mut self, result_val: u32) {
+    fn set_zero_flag(&mut self, result_val: u32) -> () {
         self.registers.flags = if result_val == 0 {
-            self.registers.flags | 0x0040u16
+            self.registers.flags | ZERO_FLAG
         } else {
-            self.registers.flags & 0xFFBFu16
+            self.registers.flags & (u16::MAX - ZERO_FLAG)
         };
     }
 
-    fn set_signed_flag_u8(&mut self, alu: u32) {
+    fn set_signed_flag_u8(&mut self, alu: u32) -> () {
         self.registers.flags = if (((alu >> 8) as u8) & 0x80) >> 7 == 1 {
-            self.registers.flags | 0x0080u16
+            self.registers.flags | SIGNED_FLAG
         } else {
-            self.registers.flags & 0xFF7Fu16
+            self.registers.flags & (u16::MAX - SIGNED_FLAG)
         };
     }
 
-    fn set_signed_flag(&mut self, alu: u32) {
+    fn set_signed_flag(&mut self, alu: u32) -> () {
         self.registers.flags = if (((alu >> 8) as u16) & 0x8000) >> 15 == 1 {
-            self.registers.flags | 0x0080u16
+            self.registers.flags | SIGNED_FLAG
         } else {
-            self.registers.flags & 0xFF7Fu16
+            self.registers.flags & (u16::MAX - SIGNED_FLAG)
         };
     }
 
-    fn set_parity_flag(&mut self, alu: u32) {
+    fn set_parity_flag(&mut self, alu: u32) -> () {
         let total = ((alu >> 8) >> 8).count_ones();
-        // let mut ctr = alu >> 8;
-        // for _ in 0..8 {
-        //     total += ctr & 1;
-        //     ctr >>= 1;
-        // }
         self.registers.flags = if total % 2 == 0 {
-            self.registers.flags | 0x0004u16
+            self.registers.flags | PARITY_FLAG
         } else {
-            self.registers.flags & 0xFFFBu16
+            self.registers.flags & (u16::MAX - PARITY_FLAG)
         }
     }
 
-    fn set_overflow_flag(&mut self, alu: u32) {
+    fn set_overflow_flag(&mut self, alu: u32) -> () {
         self.registers.flags = if (alu >> 8) > u16::MAX as u32 {
-            self.registers.flags | 0x0800u16
+            self.registers.flags | OVERFLOW_FLAG
         } else {
-            self.registers.flags & 0xF7FFu16
+            self.registers.flags & (u16::MAX - OVERFLOW_FLAG)
         };
     }
-    fn set_overflow_flag_u8(&mut self, alu: u32) {
+    fn set_overflow_flag_u8(&mut self, alu: u32) -> () {
         self.registers.flags = if (alu >> 8) > u8::MAX as u32 {
-            self.registers.flags | 0x0800u16
+            self.registers.flags | OVERFLOW_FLAG
         } else {
-            self.registers.flags & 0xF7FFu16
+            self.registers.flags & (u16::MAX - OVERFLOW_FLAG)
         };
+    }
+
+    unsafe fn cnd_jmp(&mut self, jmp: &instruction, flag: u16, exp: bool) -> () {
+        let zero = self.registers.flags & flag > 0;
+        if zero == exp {
+            let current = self.registers.biu[4];
+            let abs = jmp.Operands[0].__bindgen_anon_1.Immediate.Value.abs() as u16;
+            if jmp.Operands[0].__bindgen_anon_1.Immediate.Value > 0 {
+                self.registers.biu[4] = current + abs;
+            } else {
+                if abs > current {
+                    panic!("Broken code")
+                }
+                self.registers.biu[4] = current - abs;
+            }
+        }
     }
 }
 
@@ -338,7 +372,6 @@ mod tests {
         let mut total = 57u16.count_ones();
         assert_eq!(4, total)
     }
-
 
     #[test]
     fn shift() {

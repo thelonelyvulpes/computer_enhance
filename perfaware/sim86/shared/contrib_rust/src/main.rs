@@ -1,4 +1,5 @@
 mod simulator;
+
 use sim86_shared::*;
 use std::env;
 
@@ -46,7 +47,9 @@ fn main() {
     };
     let buf = file_buf.unwrap_or_else(|| EXAMPLE_DISASSEMBLY.to_vec());
 
-    println!("    [  ax,   bx,   cx,   dx,   sp,   bp,   si,   di][  es,   cs,   ss,   ds,   ip][flgs]");
+    println!(
+        "    [  ax,   bx,   cx,   dx,   sp,   bp,   si,   di][  es,   cs,   ss,   ds,   ip][flgs]"
+    );
     let mut simulator = simulator::Simulator::new();
     let mut offset = 0u16;
     let mut inst = 0;
