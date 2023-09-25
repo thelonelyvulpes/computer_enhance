@@ -37,7 +37,8 @@ impl Simulator {
         }
     }
 
-    pub fn execute_instruction(&mut self, inst: &instruction) {
+    pub fn execute_instruction(&mut self, inst: &instruction) -> u16 {
+        self.registers.biu[4] += inst.Size as u16;
         match inst.Op {
             operation_type_Op_mov => unsafe {
                 self.execute_mov(inst);
@@ -67,10 +68,13 @@ impl Simulator {
                 unimplemented!();
             }
         };
+
         println!(
             "{:0>4X?}{:0>4X?}[{:0>4X}]",
             self.registers.arr, self.registers.biu, self.registers.flags
         );
+
+        return self.registers.biu[4];
     }
 
     unsafe fn execute_mov(&mut self, inst: &instruction) {
