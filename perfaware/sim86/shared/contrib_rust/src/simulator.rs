@@ -2,7 +2,7 @@ use sim86_shared::*;
 
 const REG_LEN: usize = 8;
 const BIU_LEN: usize = 5;
-const MEM_LEN: usize = 10_000;
+const MEM_LEN: usize = u16::MAX as usize;
 
 const PARITY_FLAG: u16 = 0x0004u16;
 const SIGNED_FLAG: u16 = 0x0080u16;
@@ -87,6 +87,12 @@ impl Simulator {
             operation_type_Op_jb => unsafe {
                 self.cnd_jmp(inst, OVERFLOW_FLAG, true);
             },
+            operation_type_Op_loopnz => unsafe {
+                self.cx_loop(inst, false);
+            },
+            operation_type_Op_loopz => unsafe {
+                self.cx_loop(inst, true);
+            }
             _ => {
                 unimplemented!();
             }
@@ -129,6 +135,11 @@ impl Simulator {
                     let dst = into_u8_ptr(dst, high_dst);
                     *dst = src_inst.__bindgen_anon_1.Immediate.Value as u8;
                 }
+            },
+            operand_type_Operand_Memory => {
+                let address = src_inst.__bindgen_anon_1.Address;
+                let src = self.memory_ptr(address.Displacement as usize);
+                *dst = *src;
             }
             _ => {
                 panic!("No legal destination for a mov.")
@@ -141,21 +152,20 @@ impl Simulator {
         let dst_inst = inst.Operands[0];
         let dst = self.u16_ptr(dst_inst);
         let mut alu: u32;
-
         match src_inst.Type {
             operand_type_Operand_Register => {
                 let val = *self.register_ptr(src_inst.__bindgen_anon_1.Register.Index as usize);
                 match inst.Op {
-                    operation_type_Op_add => {
+                    operation_type_Op_add => unsafe {
                         alu = (*dst as u32) << 8;
                         alu = alu + ((val as u32) << 8);
                         *dst = ((alu << 8) >> 16) as u16;
                     }
-                    operation_type_Op_cmp => {
+                    operation_type_Op_cmp => unsafe {
                         alu = (*dst as u32) << 8;
                         alu = alu - ((val as u32) << 8);
                     }
-                    operation_type_Op_sub => {
+                    operation_type_Op_sub => unsafe {
                         alu = (*dst as u32) << 8;
                         alu = alu - ((val as u32) << 8);
                         *dst = ((alu << 8) >> 16) as u16;
@@ -168,16 +178,16 @@ impl Simulator {
             operand_type_Operand_Immediate => {
                 let val = src_inst.__bindgen_anon_1.Immediate.Value as u16;
                 match inst.Op {
-                    operation_type_Op_add => {
+                    operation_type_Op_add => unsafe {
                         alu = (*dst as u32) << 8;
                         alu = alu + ((val as u32) << 8);
                         *dst = ((alu << 8) >> 16) as u16;
                     }
-                    operation_type_Op_cmp => {
+                    operation_type_Op_cmp => unsafe {
                         alu = (*dst as u32) << 8;
                         alu = alu - ((val as u32) << 8);
                     }
-                    operation_type_Op_sub => {
+                    operation_type_Op_sub => unsafe {
                         alu = (*dst as u32) << 8;
                         alu = alu - ((val as u32) << 8);
                         *dst = ((alu << 8) >> 16) as u16;
@@ -276,11 +286,30 @@ impl Simulator {
         return self.registers.arr.as_mut_ptr().add(idx - 1);
     }
 
+    unsafe fn memory_ptr(&mut self, idx: usize) -> *mut u16 {
+        if idx > MEM_LEN {
+            panic!("illegal access")
+        }
+
+        return self.memory[idx-1..idx].align_to_mut::<u16>().1.as_mut_ptr();
+    }
+
     unsafe fn u16_ptr(&mut self, inst: instruction_operand) -> *mut u16 {
         match inst.Type {
             operand_type_Operand_Register => {
                 let reg_index = inst.__bindgen_anon_1.Register.Index as usize;
                 self.register_ptr(reg_index)
+            }
+            operand_type_Operand_Memory => {
+                let address = inst.__bindgen_anon_1.Address;
+
+                if address.Terms[0].Register.Index == 0 {
+                    let mem_index = address.Displacement as usize;
+                    return self.memory_ptr(mem_index);
+                }
+                let idx = self.registers.arr[(address.Terms[0].Register.Index -1) as usize] as usize;
+                let idx = idx + address.Displacement as usize;
+                return self.memory_ptr(idx);
             }
             _ => {
                 panic!("No legal destination for a mov.")
@@ -328,6 +357,7 @@ impl Simulator {
             self.registers.flags & (u16::MAX - OVERFLOW_FLAG)
         };
     }
+
     fn set_overflow_flag_u8(&mut self, alu: u32) -> () {
         self.registers.flags = if (alu >> 8) > u8::MAX as u32 {
             self.registers.flags | OVERFLOW_FLAG
@@ -339,18 +369,30 @@ impl Simulator {
     unsafe fn cnd_jmp(&mut self, jmp: &instruction, flag: u16, exp: bool) -> () {
         let zero = self.registers.flags & flag > 0;
         if zero == exp {
-            let current = self.registers.biu[4];
-            let abs = jmp.Operands[0].__bindgen_anon_1.Immediate.Value.abs() as u16;
-            if jmp.Operands[0].__bindgen_anon_1.Immediate.Value > 0 {
-                self.registers.biu[4] = current + abs;
-            } else {
-                if abs > current {
-                    panic!("Broken code")
-                }
-                self.registers.biu[4] = current - abs;
-            }
+            self.set_ip_to_jmp(jmp);
         }
     }
+
+    unsafe fn set_ip_to_jmp(&mut self, jmp: &instruction) {
+        let current = self.registers.biu[4];
+        let abs = jmp.Operands[0].__bindgen_anon_1.Immediate.Value.abs() as u16;
+        if jmp.Operands[0].__bindgen_anon_1.Immediate.Value > 0 {
+            self.registers.biu[4] = current + abs;
+        } else {
+            if abs > current {
+                panic!("Broken code")
+            }
+            self.registers.biu[4] = current - abs;
+        }
+    }
+
+    unsafe fn cx_loop(&mut self, jmp: &instruction, exp: bool) -> () {
+        self.registers.arr[2] -= 1;
+        if ((self.registers.flags & ZERO_FLAG) > 1) == exp && self.registers.arr[2] != 0 {
+            self.set_ip_to_jmp(jmp);
+        }
+    }
+
 }
 
 #[cfg(test)]
