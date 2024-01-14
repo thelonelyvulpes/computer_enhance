@@ -151,23 +151,23 @@ impl Simulator {
         let src_inst = inst.Operands[1];
         let dst_inst = inst.Operands[0];
         let dst = self.u16_ptr(dst_inst);
-        let mut alu: u32;
+        let mut alu: i32;
         match src_inst.Type {
             operand_type_Operand_Register => {
                 let val = *self.register_ptr(src_inst.__bindgen_anon_1.Register.Index as usize);
                 match inst.Op {
                     operation_type_Op_add => unsafe {
-                        alu = (*dst as u32) << 8;
-                        alu = alu + ((val as u32) << 8);
+                        alu = (*dst as i32) << 8;
+                        alu = alu + ((val as i32) << 8);
                         *dst = ((alu << 8) >> 16) as u16;
                     }
                     operation_type_Op_cmp => unsafe {
-                        alu = (*dst as u32) << 8;
-                        alu = alu - ((val as u32) << 8);
+                        alu = (*dst as i32) << 8;
+                        alu = alu - ((val as i32) << 8);
                     }
                     operation_type_Op_sub => unsafe {
-                        alu = (*dst as u32) << 8;
-                        alu = alu - ((val as u32) << 8);
+                        alu = (*dst as i32) << 8;
+                        alu = alu - ((val as i32) << 8);
                         *dst = ((alu << 8) >> 16) as u16;
                     }
                     _ => {
@@ -179,17 +179,17 @@ impl Simulator {
                 let val = src_inst.__bindgen_anon_1.Immediate.Value as u16;
                 match inst.Op {
                     operation_type_Op_add => unsafe {
-                        alu = (*dst as u32) << 8;
-                        alu = alu + ((val as u32) << 8);
+                        alu = (*dst as i32) << 8;
+                        alu = alu + ((val as i32) << 8);
                         *dst = ((alu << 8) >> 16) as u16;
                     }
                     operation_type_Op_cmp => unsafe {
-                        alu = (*dst as u32) << 8;
-                        alu = alu - ((val as u32) << 8);
+                        alu = (*dst as i32) << 8;
+                        alu = alu - ((val as i32) << 8);
                     }
                     operation_type_Op_sub => unsafe {
-                        alu = (*dst as u32) << 8;
-                        alu = alu - ((val as u32) << 8);
+                        alu = (*dst as i32) << 8;
+                        alu = alu - ((val as i32) << 8);
                         *dst = ((alu << 8) >> 16) as u16;
                     }
                     _ => {
@@ -202,10 +202,10 @@ impl Simulator {
             }
         };
 
-        self.set_zero_flag(alu);
-        self.set_signed_flag(alu);
-        self.set_overflow_flag(alu);
-        self.set_parity_flag(alu);
+        self.set_zero_flag(alu as u32);
+        self.set_signed_flag(alu as u32);
+        self.set_overflow_flag(alu as u32);
+        self.set_parity_flag(alu as u32);
     }
 
     unsafe fn execute_u8_arithmetic(&mut self, inst: &instruction) -> () {
